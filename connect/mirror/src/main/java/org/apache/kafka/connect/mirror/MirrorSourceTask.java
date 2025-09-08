@@ -148,19 +148,37 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
-        } catch (WakeupException e) {
+        }catch (WakeupException e) {
             return null;
         } catch (KafkaException e) {
-            log.warn("Failure during poll.", e);
+            // **Log truncation detection**
+            Throwable cause = e.getCause();
+            if (cause instanceof OffsetOutOfRangeException) {
+                log.error("Detected log truncation (offset out-of-range) for topic '{}', partition {}: {}",
+                    sourceTopic, partition, e.getMessage());
+                throw e; // fail-fast on truncation
+            }
+            //other KafkaExceptions handled below...
+                } catch (WakeupException e) {
             return null;
-        } catch (Throwable e)  {
-            log.error("Failure during poll.", e);
-            // allow Connect to deal with the exception
-            throw e;
-        } finally {
-            consumerAccess.release();
+            } catch (KafkaException e) {
+                log.warn("Failure during poll.", e);
+                return null;
+            } catch (Throwable e)  {
+                log.error("Failure during poll.", e);
+                // allow Connect to deal with the exception
+                throw e;
+            } finally {
+                consumerAccess.release();
+            }
+        catch (WakeupException e) {
+    return null;
+            else {
+                log.warn("Failure during poll.", e);
+                return null;
+            }
         }
-    }
+        
  
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
